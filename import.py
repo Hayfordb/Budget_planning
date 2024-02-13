@@ -1,56 +1,92 @@
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import filedialog, messagebox, ttk
 import pandas as pd
+import os
+import openpyxl
+from openpyxl.utils.exceptions import InvalidFileException
 
-def transform_data(input_file_path, output_file_path):
-    # Чтение данных с листа "Расчёт"
-    data = pd.read_excel(input_file_path, sheet_name="Расчёт")
-    
-    # Список для хранения преобразованных данных
-    transformed_data_list = []
-    
-    # Итерация по всем столбцам с датами, начиная со второго, и игнорирование колонки "Итого"
-    for date_column in data.columns[1:]:
-        if date_column == "Итого":
-            continue  # Пропускаем столбец "Итого"
-        
-        # Создание временного DataFrame для текущей даты
-        temp_df = data[['Статья', date_column]].copy()
-        temp_df.rename(columns={date_column: 'План'}, inplace=True)
-        
-        # Оставляем дату в исходном числовом формате
-        temp_df['Дата'] = pd.to_datetime(date_column)
-        
-        # Добавление преобразованного DataFrame в список
-        transformed_data_list.append(temp_df)
-    
-    # Объединение всех временных DataFrame в один
-    transformed_data = pd.concat(transformed_data_list, ignore_index=True)
-    
-    # Переупорядочивание столбцов
-    transformed_data = transformed_data[['Дата', 'Статья', 'План']]
-    
-    # Сохранение преобразованных данных
-    transformed_data.to_excel(output_file_path, index=False)
+class ExcelMergerApp(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("Excel Merger")
+        self.geometry("600x400")
 
-def select_files_and_transform():
-    # Создание окна выбора файла
-    root = tk.Tk()
-    root.withdraw()  # Не показываем полное окно Tkinter
+        self.file_treeview = ttk.Treeview(self, columns=("Files"), show="headings")
+        self.file_treeview.heading("Files", text="Excel Files")
+        self.file_treeview.pack(pady=20, fill=tk.BOTH, expand=True)
 
-    # Запрос у пользователя файла для чтения
-    input_file_path = filedialog.askopenfilename(title="Выберите исходный файл Excel для преобразования")
-    if not input_file_path:
-        return
-    
-    # Запрос у пользователя пути для сохранения результата
-    output_file_path = filedialog.asksaveasfilename(defaultextension=".xlsx", filetypes=[("Excel files", "*.xlsx")], title="Сохранить файл как")
-    if not output_file_path:
-        return
-    
-    # Преобразование данных
-    transform_data(input_file_path, output_file_path)
-    print(f"Файл успешно сохранен: {output_file_path}")
+        select_folder_btn = tk.Button(self, text="Выберите папку", command=self.select_folder)
+        select_folder_btn.pack(pady=10)
 
-# Запуск функции с GUI
-select_files_and_transform()
+        merge_btn = tk.Button(self, text="Собрать", command=self.merge_excel_files)
+        merge_btn.pack(pady=10)
+
+        self.input_folder_path = ""
+        self.files_to_merge = []
+
+    def check_excel_parameters(self, file_path):
+        try:
+            wb = openpyxl.load_workbook(file_path, read_only=True)
+            if "Параметры" in wb.sheetnames:
+                sheet = wb["Параметры"]
+                for row in sheet['C7:C10']:
+                    for cell in row:
+                        if cell.value is None or cell.value == "":
+                            return False
+                return True
+            else:
+                return False
+        except InvalidFileException:
+            return False  # Файл не может быть открыт как Excel файл.
+        except Exception as e:
+            print(f"Ошибка при проверке файла {file_path}: {e}")
+            return False
+
+    def select_folder(self):
+        self.input_folder_path = filedialog.askdirectory(title="Выберите папку с файлами Excel")
+        if not self.input_folder_path:
+            return
+
+        self.file_treeview.delete(*self.file_treeview.get_children())
+        self.files_to_merge = []
+        for file in os.listdir(self.input_folder_path):
+            if file.endswith('.xlsx'):
+                file_path = os.path.join(self.input_folder_path, file)
+                valid = self.check_excel_parameters(file_path)
+                if valid:
+                    self.file_treeview.insert("", tk.END, values=(file), tags=('valid',))
+                    self.files_to_merge.append(file_path)
+                else:
+                    self.file_treeview.insert("", tk.END, values=(file), tags=('invalid',))
+        self.file_treeview.tag_configure('valid', foreground='black')
+        self.file_treeview.tag_configure('invalid', foreground='red')
+
+    def merge_excel_files(self):
+        if not self.files_to_merge:
+            messagebox.showerror("Ошибка", "Не выбраны файлы для слияния.")
+            return
+
+        output_file_path = filedialog.asksaveasfilename(defaultextension=".xlsx", filetypes=[("Excel files", "*.xlsx")], title="Сохранить конечный файл как")
+        if not output_file_path:
+            return
+
+        all_transformed_data = []
+        for file_path in self.files_to_merge:
+            data = pd.read_excel(file_path, sheet_name="Расчёт")
+            transformed_data_list = []
+            for date_column in data.columns[1:]:
+                if date_column == "Итого":
+                    continue
+                temp_df = data[['Статья', date_column]].copy()
+                temp_df.rename(columns={date_column: 'План'}, inplace=True)
+                temp_df['Дата'] = pd.to_datetime(date_column)
+                transformed_data_list.append(temp_df)
+            all_transformed_data.append(pd.concat(transformed_data_list, ignore_index=True))
+
+        final_data = pd.concat(all_transformed_data, ignore_index=True)
+        final_data.to_excel(output_file_path, index=False)
+        messagebox.showinfo("Завершено", "Конечный файл успешно сохранен.")
+
+if __name__ == "__main__":
+    app = ExcelMergerApp()
+    app.mainloop()
