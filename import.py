@@ -15,9 +15,8 @@ def transform_data(input_file_path, output_file_path):
         temp_df = data[['Статья', date_column]].copy()
         temp_df.rename(columns={date_column: 'План'}, inplace=True)
         
-        # Преобразование названия столбца даты к формату "МММ.ГГ" и добавление как столбец "Дата"
-        date = pd.to_datetime(date_column).strftime('%b.%y').upper()
-        temp_df['Дата'] = date
+        # Оставляем дату в исходном числовом формате
+        temp_df['Дата'] = pd.to_datetime(date_column)
         
         # Добавление преобразованного DataFrame в список
         transformed_data_list.append(temp_df)
