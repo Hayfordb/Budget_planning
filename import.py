@@ -42,6 +42,7 @@ class ExcelMergerApp(tk.Tk):
             print(f"Ошибка при проверке файла {file_path}: {e}")
             return False
 
+
     def select_folder(self):
         self.input_folder_path = filedialog.askdirectory(title="Выберите папку с файлами Excel")
         if not self.input_folder_path:
