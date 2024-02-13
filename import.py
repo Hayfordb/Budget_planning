@@ -3,14 +3,17 @@ from tkinter import filedialog
 import pandas as pd
 
 def transform_data(input_file_path, output_file_path):
-    # Чтение данных
-    data = pd.read_excel(input_file_path)
+    # Чтение данных с листа "Расчёт"
+    data = pd.read_excel(input_file_path, sheet_name="Расчёт")
     
     # Список для хранения преобразованных данных
     transformed_data_list = []
     
-    # Итерация по всем столбцам с датами, начиная со второго
+    # Итерация по всем столбцам с датами, начиная со второго, и игнорирование колонки "Итого"
     for date_column in data.columns[1:]:
+        if date_column == "Итого":
+            continue  # Пропускаем столбец "Итого"
+        
         # Создание временного DataFrame для текущей даты
         temp_df = data[['Статья', date_column]].copy()
         temp_df.rename(columns={date_column: 'План'}, inplace=True)
