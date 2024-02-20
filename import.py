@@ -29,7 +29,7 @@ class ExcelMergerApp(tk.Tk):
             wb = openpyxl.load_workbook(file_path, read_only=True)
             if "Параметры" in wb.sheetnames:
                 sheet = wb["Параметры"]
-                for row in sheet['C7:C10']:
+                for row in sheet['C5:C13']:
                     for cell in row:
                         if cell.value is None or cell.value == "":
                             return False
@@ -41,7 +41,6 @@ class ExcelMergerApp(tk.Tk):
         except Exception as e:
             print(f"Ошибка при проверке файла {file_path}: {e}")
             return False
-
 
     def select_folder(self):
         self.input_folder_path = filedialog.askdirectory(title="Выберите папку с файлами Excel")
@@ -74,13 +73,23 @@ class ExcelMergerApp(tk.Tk):
         all_transformed_data = []
         for file_path in self.files_to_merge:
             data = pd.read_excel(file_path, sheet_name="Расчёт")
+            wb = openpyxl.load_workbook(file_path, data_only=True)
+            parameters_sheet = wb["Параметры"]
+            parameters = {}
+            for row in parameters_sheet.iter_rows(min_row=5, max_row=13, min_col=2, max_col=3, values_only=True):
+                parameter_name, parameter_value = row
+                parameters[parameter_name] = parameter_value
+            
             transformed_data_list = []
             for date_column in data.columns[1:]:
                 if date_column == "Итого":
                     continue
                 temp_df = data[['Статья', date_column]].copy()
                 temp_df.rename(columns={date_column: 'План'}, inplace=True)
-                temp_df['Дата'] = pd.to_datetime(date_column)
+                temp_df['Дата-Статья'] = pd.to_datetime(date_column)
+                # Добавление параметров в DataFrame
+                for parameter_name in parameters:
+                    temp_df[parameter_name] = parameters[parameter_name]
                 transformed_data_list.append(temp_df)
             all_transformed_data.append(pd.concat(transformed_data_list, ignore_index=True))
 
@@ -91,3 +100,4 @@ class ExcelMergerApp(tk.Tk):
 if __name__ == "__main__":
     app = ExcelMergerApp()
     app.mainloop()
+
