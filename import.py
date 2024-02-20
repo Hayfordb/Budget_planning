@@ -66,38 +66,55 @@ class ExcelMergerApp(tk.Tk):
             messagebox.showerror("Ошибка", "Не выбраны файлы для слияния.")
             return
 
-        output_file_path = filedialog.asksaveasfilename(defaultextension=".xlsx", filetypes=[("Excel files", "*.xlsx")], title="Сохранить конечный файл как")
-        if not output_file_path:
+        target_file_path = filedialog.askopenfilename(defaultextension=".xlsx", filetypes=[("Excel files", "*.xlsx")], title="Выберите файл для записи данных")
+        if not target_file_path:
             return
 
-        all_transformed_data = []
-        for file_path in self.files_to_merge:
-            data = pd.read_excel(file_path, sheet_name="Расчёт")
-            wb = openpyxl.load_workbook(file_path, data_only=True)
-            parameters_sheet = wb["Параметры"]
-            parameters = {}
-            for row in parameters_sheet.iter_rows(min_row=5, max_row=13, min_col=2, max_col=3, values_only=True):
-                parameter_name, parameter_value = row
-                parameters[parameter_name] = parameter_value
-            
-            transformed_data_list = []
-            for date_column in data.columns[1:]:
-                if date_column == "Итого":
-                    continue
-                temp_df = data[['Статья', date_column]].copy()
-                temp_df.rename(columns={date_column: 'План'}, inplace=True)
-                temp_df['Дата-Статья'] = pd.to_datetime(date_column)
-                # Добавление параметров в DataFrame
-                for parameter_name in parameters:
-                    temp_df[parameter_name] = parameters[parameter_name]
-                transformed_data_list.append(temp_df)
-            all_transformed_data.append(pd.concat(transformed_data_list, ignore_index=True))
+        try:
+            book = openpyxl.load_workbook(target_file_path)
+            if "Data" not in book.sheetnames:
+                book.create_sheet("Data")
+            sheet = book["Data"]
 
-        final_data = pd.concat(all_transformed_data, ignore_index=True)
-        final_data.to_excel(output_file_path, index=False)
-        messagebox.showinfo("Завершено", "Конечный файл успешно сохранен.")
+            all_transformed_data = []
+            for file_path in self.files_to_merge:
+                data = pd.read_excel(file_path, sheet_name="Расчёт")
+                wb = openpyxl.load_workbook(file_path, data_only=True)
+                parameters_sheet = wb["Параметры"]
+                parameters = {}
+                for row in parameters_sheet.iter_rows(min_row=5, max_row=13, min_col=2, max_col=3, values_only=True):
+                    parameter_name, parameter_value = row
+                    parameters[parameter_name] = parameter_value
+                
+                transformed_data_list = []
+                for date_column in data.columns[1:]:
+                    if date_column == "Итого":
+                        continue
+                    temp_df = data[['Статья', date_column]].copy()
+                    temp_df.rename(columns={date_column: 'План'}, inplace=True)
+                    temp_df['Дата'] = pd.to_datetime(date_column)
+                    for parameter_name in parameters:
+                        temp_df[parameter_name] = parameters[parameter_name]
+                    transformed_data_list.append(temp_df)
+                all_transformed_data.append(pd.concat(transformed_data_list, ignore_index=True))
+
+            final_data = pd.concat(all_transformed_data, ignore_index=True)
+
+            for r in dataframe_to_rows(final_data, index=False):
+                sheet.append(r)
+
+            book.save(target_file_path)
+            messagebox.showinfo("Завершено", "Данные успешно добавлены в файл.")
+
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Произошла ошибка при записи данных: {e}")
+
+def dataframe_to_rows(df, index=False, header=True):
+    if header:
+        yield df.columns.tolist()
+    for row in df.itertuples(index=index, name=None):
+        yield list(row)[1:] if index else list(row)
 
 if __name__ == "__main__":
     app = ExcelMergerApp()
     app.mainloop()
-
